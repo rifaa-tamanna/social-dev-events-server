@@ -18,58 +18,131 @@ export async function connectToMongoDB() {
     return client;
   } catch (err) {
     console.dir(err);
+    throw err;
   }
 }
 
 const mongoClient = await connectToMongoDB();
 
-// Database create
+// Database
 const db = mongoClient.db("social-dev-event");
 const eventCollection = db.collection("event");
 const joiningCollection = db.collection("joining");
 
-// home route
+// Home Route
 app.get("/", (req, res) => {
   res.send({ message: "Server is running fine!" });
 });
 
-// data create ( event create ( data ) )
+// Create Event
 app.post("/create-event", async (req, res) => {
-  const data = req.body;
-  const result = await eventCollection.insertOne(data);
+  try {
+    const data = req.body;
 
-  console.log(result);
-  res.send(result);
+    const result = await eventCollection.insertOne(data);
+
+    res.send({
+      success: true,
+      message: "Event created successfully!",
+      result,
+    });
+  } catch (error) {
+    console.error("Create Event Error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to create event",
+    });
+  }
 });
 
-// data get kore front-end e niye ashbo
+// Get All Events
 app.get("/events", async (req, res) => {
-  const result = await eventCollection.find().toArray();
-  res.send(result);
+  try {
+    const result = await eventCollection.find().toArray();
+    res.send(result);
+  } catch (error) {
+    console.error("Get Events Error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to fetch events",
+    });
+  }
 });
 
-// single date details
+// Get Single Event Details
 app.get("/events/:id", async (req, res) => {
-  const { id } = req.params;
-  const result = await eventCollection.findOne({ _id: new ObjectId(id) });
-  res.send(result);
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({
+        success: false,
+        message: "Invalid event ID",
+      });
+    }
+
+    const result = await eventCollection.findOne({
+      _id: new ObjectId(id),
+    });
+
+    if (!result) {
+      return res.status(404).send({
+        success: false,
+        message: "Event not found",
+      });
+    }
+
+    res.send(result);
+  } catch (error) {
+    console.error("Single Event Error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to fetch event details",
+    });
+  }
 });
 
-// joining data insert
+// Join Event
 app.post("/joining", async (req, res) => {
   try {
     const data = req.body;
 
-    // Remove the existing event _id
+    // Remove existing event _id
     const { _id, ...joiningData } = data;
 
+    // Validate required data
+    if (!_id || !joiningData.email) {
+      return res.status(400).send({
+        success: false,
+        message: "Event ID and user email are required",
+      });
+    }
+
+    // Check if user already joined this event
+    const alreadyJoined = await joiningCollection.findOne({
+      eventId: _id,
+      email: joiningData.email,
+    });
+
+    // If already joined, stop here
+    if (alreadyJoined) {
+      return res.status(409).send({
+        success: false,
+        message: "You have already joined this event!",
+      });
+    }
+
+    // Insert joining data
     const result = await joiningCollection.insertOne({
       ...joiningData,
       eventId: _id,
       joinedAt: new Date(),
     });
 
-    res.send({
+    res.status(201).send({
       success: true,
       message: "Successfully joined the event",
       result,
@@ -85,14 +158,21 @@ app.post("/joining", async (req, res) => {
   }
 });
 
-// joining event theke leave API
+// Leave Event
 app.delete("/joining", async (req, res) => {
   try {
     const { eventId, email } = req.body;
 
+    if (!eventId || !email) {
+      return res.status(400).send({
+        success: false,
+        message: "Event ID and email are required",
+      });
+    }
+
     const result = await joiningCollection.deleteOne({
-      eventId: eventId,
-      email: email,
+      eventId,
+      email,
     });
 
     if (result.deletedCount === 0) {
@@ -116,22 +196,71 @@ app.delete("/joining", async (req, res) => {
   }
 });
 
-// My Create Event or Manage Event
-app.get('/my-events/:email', async(req, res) => {
-    const {email} = req.params
-    const result = await eventCollection.find({ organizerEmail:email }).toArray()
-    res.send(result)
-})
+// Get My Joined Events
+app.get("/my-joined-events/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
 
+    // Find all events joined by this user
+    const joinedData = await joiningCollection.find({ email }).toArray();
 
+    // Get event IDs
+    const eventIds = joinedData
+      .filter((item) => ObjectId.isValid(item.eventId))
+      .map((item) => new ObjectId(item.eventId));
 
+    // Find original events
+    const events = await eventCollection
+      .find({ _id: { $in: eventIds } })
+      .toArray();
 
+    // Match joining data with event data
+    const eventMap = new Map(
+      events.map((event) => [event._id.toString(), event]),
+    );
 
+    const result = joinedData.map((join) => ({
+      ...(eventMap.get(join.eventId) || join),
+      joiningId: join._id.toString(),
+      eventId: join.eventId,
+      joinedAt: join.joinedAt,
+    }));
 
+    res.send({
+      success: true,
+      result,
+    });
+  } catch (error) {
+    console.error("My Joined Events Error:", error);
 
+    res.status(500).send({
+      success: false,
+      message: "Failed to fetch joined events",
+    });
+  }
+});
 
-// http://localhost:5000/my-events/
+// Get My Created Events
+app.get("/my-events/:email", async (req, res) => {
+  try {
+    const { email } = req.params;
 
+    const result = await eventCollection
+      .find({ organizerEmail: email })
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    console.error("My Events Error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to fetch my events",
+    });
+  }
+});
+
+// Start Server
 app.listen(port, () => {
   console.log(`Your Server is running on port ${port}`);
 });
