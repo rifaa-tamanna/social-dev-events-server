@@ -39,9 +39,20 @@ app.post("/create-event", async (req, res) => {
   try {
     const data = req.body;
 
-    const result = await eventCollection.insertOne(data);
+    if (!data.organizerEmail) {
+      return res.status(400).send({
+        success: false,
+        message: "Organizer email is required!",
+      });
+    }
 
-    res.send({
+    const result = await eventCollection.insertOne({
+      ...data,
+      organizerEmail: data.organizerEmail,
+      createdAt: new Date(),
+    });
+
+    res.status(201).send({
       success: true,
       message: "Event created successfully!",
       result,
