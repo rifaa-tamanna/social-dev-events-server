@@ -30,7 +30,7 @@ const db = mongoClient.db("social-dev-event");
 const eventCollection = db.collection("event");
 const joiningCollection = db.collection("joining");
 
-// Verify User API
+// Verify Token
 const verifyToken = async(req, res, next) => {
   const authHeader = req.headers.authorization;
   if(!authHeader) {
@@ -234,20 +234,6 @@ app.post("/joining", async (req, res) => {
       return res.status(400).send({
         success: false,
         message: "Event ID and user email are required",
-      });
-    }
-
-    // Check if user already joined this event
-    const alreadyJoined = await joiningCollection.findOne({
-      eventId: _id,
-      email: joiningData.email,
-    });
-
-    // If already joined, stop here
-    if (alreadyJoined) {
-      return res.status(409).send({
-        success: false,
-        message: "You have already joined this event!",
       });
     }
 
