@@ -29,6 +29,16 @@ const db = mongoClient.db("social-dev-event");
 const eventCollection = db.collection("event");
 const joiningCollection = db.collection("joining");
 
+// Verify User API
+const verifyAPI = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (authHeader !== "user logged in") {
+    return res.status(401).send({ msg: "Unauthorized" });
+  }
+  next();
+};
+
 // Home Route
 app.get("/", (req, res) => {
   res.send({ message: "Server is running fine!" });
@@ -156,38 +166,44 @@ app.get("/events", async (req, res) => {
 });
 
 // Get Single Event Details
-app.get("/events/:id", async (req, res) => {
-  try {
-    const { id } = req.params;
+app.get(
+  "/events/:id",
 
-    if (!ObjectId.isValid(id)) {
-      return res.status(400).send({
+  verifyAPI,
+
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!ObjectId.isValid(id)) {
+        return res.status(400).send({
+          success: false,
+          message: "Invalid event ID",
+        });
+      }
+
+      const result = await eventCollection.findOne({
+        _id: new ObjectId(id),
+      });
+
+      if (!result) {
+        return res.status(404).send({
+          success: false,
+          message: "Event not found",
+        });
+      }
+
+      res.send(result);
+    } catch (error) {
+      console.error("Single Event Error:", error);
+
+      res.status(500).send({
         success: false,
-        message: "Invalid event ID",
+        message: "Failed to fetch event details",
       });
     }
-
-    const result = await eventCollection.findOne({
-      _id: new ObjectId(id),
-    });
-
-    if (!result) {
-      return res.status(404).send({
-        success: false,
-        message: "Event not found",
-      });
-    }
-
-    res.send(result);
-  } catch (error) {
-    console.error("Single Event Error:", error);
-
-    res.status(500).send({
-      success: false,
-      message: "Failed to fetch event details",
-    });
-  }
-});
+  },
+);
 
 // Join Event
 app.post("/joining", async (req, res) => {
@@ -454,4 +470,4 @@ app.listen(port, () => {
   console.log(`Your Server is running on port ${port}`);
 });
 
-export default app
+export default app;
