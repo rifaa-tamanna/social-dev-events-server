@@ -271,6 +271,111 @@ app.get("/my-events/:email", async (req, res) => {
   }
 });
 
+//Patch Event
+app.patch("/events/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { organizerEmail, ...updatedData } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid event ID" });
+    }
+
+    if (!organizerEmail) {
+      return res.status(400).send({ message: "Organizer email is required" });
+    }
+
+    const allowedFields = [
+      "title",
+      "type",
+      "date",
+      "location",
+      "thumbnail",
+      "description",
+    ];
+
+    const updateFields = {};
+
+    for (const field of allowedFields) {
+      if (typeof updatedData[field] === "string") {
+        updateFields[field] = updatedData[field].trim();
+      }
+    }
+
+    if (Object.keys(updateFields).length === 0) {
+      return res.status(400).send({ message: "No valid data to update" });
+    }
+
+    const result = await eventCollection.updateOne(
+      {
+        _id: new ObjectId(id),
+        organizerEmail,
+      },
+      {
+        $set: updateFields,
+      },
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).send({
+        message: "Event not found or unauthorized",
+      });
+    }
+
+    res.send({
+      success: true,
+      message: "Event updated successfully",
+    });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to update event",
+    });
+  }
+});
+
+// Delete Event
+app.delete("/events/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { organizerEmail } = req.body;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).send({ message: "Invalid event ID" });
+    }
+
+    if (!organizerEmail) {
+      return res.status(400).send({
+        message: "Organizer email is required",
+      });
+    }
+
+    const result = await eventCollection.deleteOne({
+      _id: new ObjectId(id),
+      organizerEmail,
+    });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).send({
+        message: "Event not found or unauthorized",
+      });
+    }
+
+    // Remove associated joining records
+    await joiningCollection.deleteMany({
+      eventId: id,
+    });
+
+    res.send({
+      success: true,
+      message: "Event deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).send({
+      message: "Failed to delete event",
+    });
+  }
+});
+
 // Start Server
 app.listen(port, () => {
   console.log(`Your Server is running on port ${port}`);
