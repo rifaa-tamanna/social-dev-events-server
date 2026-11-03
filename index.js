@@ -2,6 +2,7 @@ import express from "express";
 import { MongoClient, ObjectId } from "mongodb";
 import "dotenv/config";
 import cors from "cors";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const app = express();
 const port = 5000;
@@ -30,13 +31,28 @@ const eventCollection = db.collection("event");
 const joiningCollection = db.collection("joining");
 
 // Verify User API
-const verifyAPI = (req, res, next) => {
+const verifyToken = async(req, res, next) => {
   const authHeader = req.headers.authorization;
-
-  if (authHeader !== "user logged in") {
-    return res.status(401).send({ msg: "Unauthorized" });
+  if(!authHeader) {
+    return res.status(401).send({msg: 'Unauthorized'})
   }
-  next();
+
+  const token = authHeader.split(" ")[1]
+  if(!token) {
+    return res.status(401).send({msg: 'Unauthorized'})
+  }
+
+  const JWKS = createRemoteJWKSet (
+    new URL('http://localhost:3000/api/auth/jwks')
+  )
+
+  try {
+    const {payload} = await jwtVerify(token, JWKS)
+    next();
+  } catch (error) {
+    return res.status(401).send({msg: 'Server Error'})
+  }
+  
 };
 
 // Home Route
@@ -169,7 +185,7 @@ app.get("/events", async (req, res) => {
 app.get(
   "/events/:id",
 
-  verifyAPI,
+  verifyToken,
 
   async (req, res) => {
     try {
