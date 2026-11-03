@@ -46,6 +46,49 @@ app.post("/create-event", async (req, res) => {
       });
     }
 
+    // Validate event date format (YYYY-MM-DD)
+    const eventDate = data.date;
+
+    if (
+      typeof eventDate !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(eventDate)
+    ) {
+      return res.status(400).send({
+        success: false,
+        message: "Please provide a valid event date.",
+      });
+    }
+
+    // Check whether the date is a real calendar date
+    const parsedDate = new Date(`${eventDate}T00:00:00.000Z`);
+
+    if (
+      Number.isNaN(parsedDate.getTime()) ||
+      parsedDate.toISOString().slice(0, 10) !== eventDate
+    ) {
+      return res.status(400).send({
+        success: false,
+        message: "Invalid event date.",
+      });
+    }
+
+    // Get today's date according to Bangladesh time
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Dhaka",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    // Reject past dates
+    if (eventDate < today) {
+      return res.status(400).send({
+        success: false,
+        message:
+          "Past event dates are not allowed. Select today or a future date.",
+      });
+    }
+
     const result = await eventCollection.insertOne({
       ...data,
       organizerEmail: data.organizerEmail,
@@ -63,6 +106,36 @@ app.post("/create-event", async (req, res) => {
     res.status(500).send({
       success: false,
       message: "Failed to create event",
+    });
+  }
+});
+
+// Get 6 Most Recently Created Upcoming Events
+app.get("/recent-upcoming-events", async (req, res) => {
+  try {
+    // Get today's date according to Bangladesh time
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Dhaka",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    const result = await eventCollection
+      .find({
+        date: { $gte: today },
+      })
+      .sort({ createdAt: -1 })
+      .limit(6)
+      .toArray();
+
+    res.send(result);
+  } catch (error) {
+    console.error("Recent Upcoming Events Error:", error);
+
+    res.status(500).send({
+      success: false,
+      message: "Failed to fetch recent upcoming events",
     });
   }
 });
