@@ -453,3 +453,5 @@ app.delete("/events/:id", async (req, res) => {
 app.listen(port, () => {
   console.log(`Your Server is running on port ${port}`);
 });
+
+export default app
