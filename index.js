@@ -43,7 +43,7 @@ const verifyToken = async(req, res, next) => {
   }
 
   const JWKS = createRemoteJWKSet (
-    new URL('http://localhost:3000/api/auth/jwks')
+    new URL(`${process.env.CLIENT_URL}/api/auth/jwks`)
   )
 
   try {
@@ -183,11 +183,7 @@ app.get("/events", async (req, res) => {
 
 // Get Single Event Details
 app.get(
-  "/events/:id",
-
-  verifyToken,
-
-  async (req, res) => {
+  "/events/:id", async (req, res) => {
     try {
       const { id } = req.params;
 
